@@ -58,10 +58,23 @@ func ScanrowIntoUser(rows *sql.Rows) (*types.User, error) {
 }
 
 func (s *Store) GetUserByID(id int) (*types.User, error) {
+	rows, err := s.db.Query("SELECT * FROM users WHERE id = ?", id)
+	if err != nil {
+		return nil, err
+	}
+	u := new(types.User)
+	for rows.Next() {
+		u, err = ScanrowIntoUser(rows)
+		if err!= nil {
+			return nil, err
+		}
 
+	}
+	if u.ID == 0 {
+	return nil, fmt.Errorf("user not found")
+	}
 
-
-	return nil , nil
+	return u, nil
 }
 
 func (s *Store) CreatedUser(user types.User) error {

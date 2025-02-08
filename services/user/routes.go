@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/FarheenParvez/GOECOMAPI/services/auth"
+	"github.com/go-playground/validator/v10"
 	"github.com/FarheenParvez/GOECOMAPI/types"
 	"github.com/FarheenParvez/GOECOMAPI/utils"
 
@@ -29,7 +30,7 @@ func NewHandler(store types.UserStore) *Handler {
 func (h *Handler) RegisterRoutes(router *mux.Router) {
 
 	router.HandleFunc("/login", h.handleLogin).Methods("POST")
-	router.HandleFunc("/register", h.handleLogin).Methods("POST")
+	router.HandleFunc("/register", h.handleRegistery).Methods("POST")
 
 }
 
@@ -39,24 +40,28 @@ func (h* Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (h* Handler) handleRegistery(w http.ResponseWriter, r *http.Request) {
 	// 1. get jason payload from request
-	if r.Body == nil {
-
-	}
-    var payload types.RegisterUserPayload
-	if err:= utils.ParseJSON(r, payload); err!= nil {
+    var user types.RegisterUserPayload
+	if err := utils.ParseJSON(r, &user); err != nil {
 		utils.WriteError(w, http.StatusBadRequest, err)
+		return
 	}
 	//err:= json.NewDecoder(r.Body).Decode(payload)
 
 	// 2. validate the payload i.e cheecck if user already exists
 
-	 _, err := h.store.GetUserByEmail(payload.Email)
+	if err := utils.Validate.Struct(user); err != nil {
+		errors := err.(validator.ValidationErrors)
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid payload: %v", errors))
+		return
+	}
+
+	 _, err := h.store.GetUserByEmail(user.Email)
 	if err == nil {
-		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("user  with email %s already exists", payload.Email))
+		utils.WriteError(w, http.StatusBadRequest, fmt.Errorf("user  with email %s already exists", user.Email))
 		return 
 	}
 	
-	hashedpassword, err := auth.HashPassword(payload.Password)
+	hashedpassword, err := auth.HashPassword(user.Password)
 	if err != nil {
 		utils.WriteError(w, http.StatusInternalServerError, err)
 		return
@@ -64,9 +69,9 @@ func (h* Handler) handleRegistery(w http.ResponseWriter, r *http.Request) {
 
 	// 3. if user does not exist, create a new user
 	err = h.store.CreatedUser(types.User{
-		FirstName: payload.FirstName,
-		LastName: payload.Lastname,
-	    Email: payload.Email,
+		FirstName: user.FirstName,
+		LastName: user.Lastname,
+	    Email: user.Email,
 		Password: hashedpassword,	
 	})
 
@@ -74,6 +79,7 @@ func (h* Handler) handleRegistery(w http.ResponseWriter, r *http.Request) {
 		utils.WriteError(w, http.StatusInternalServerError, err)
 		return
 	}
+
 	utils.WriteJSON(w, http.StatusCreated, nil)
 	 
 
